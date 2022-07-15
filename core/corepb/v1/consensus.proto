@@ -8,6 +8,7 @@ import "core/corepb/v1/core.proto";
 
 message QBFTMsg {
   int64                          type           = 1;
+
   core.corepb.v1.Duty            duty           = 2;
   int64                          peer_idx       = 3;
   int64                          round          = 4;

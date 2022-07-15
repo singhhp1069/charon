@@ -17,6 +17,7 @@ package p2p
 
 import (
 	"context"
+	"io"
 	"sync"
 
 	"github.com/libp2p/go-libp2p-core/host"
@@ -37,6 +38,11 @@ const (
 
 // SendFunc is an abstract function responsible for sending libp2p messages.
 type SendFunc func(context.Context, host.Host, protocol.ID, peer.ID, proto.Message) error
+
+// SendReceiveFunc is an abstract fuction resposible for sending and receiving
+// a single pair of libp2p messages.
+type SendReceiveFunc func(ctx context.Context, tcpNode host.Host, peerID peer.ID,
+	request, response proto.Message, protoID ...protocol.ID) error
 
 var (
 	_ SendFunc = Send
@@ -95,7 +101,7 @@ func (s *Sender) addResult(ctx context.Context, peerID peer.ID, err error) {
 	s.states.Store(peerID, state) // Note there is a race if two results for the same peer is added at the same time, but this isn't critical.
 }
 
-// SendAsync returns nil sends a libp2p message asynchronously. It logs results on state change (success to/from failure).
+// SendAsync returns nil and sends a libp2p message asynchronously. It logs results on state change (success to/from failure).
 // It implements SendFunc.
 func (s *Sender) SendAsync(parent context.Context, tcpNode host.Host, protoID protocol.ID, peerID peer.ID, msg proto.Message) error {
 	go func() {
@@ -104,6 +110,45 @@ func (s *Sender) SendAsync(parent context.Context, tcpNode host.Host, protoID pr
 		err := Send(ctx, tcpNode, protoID, peerID, msg)
 		s.addResult(ctx, peerID, err)
 	}()
+
+	return nil
+}
+
+// SendRecv sends the proto request message and marshals the single proto response or returns an error.
+func (s *Sender) SendRecv(ctx context.Context, tcpNode host.Host, peerID peer.ID,
+	request, response proto.Message, protoID ...protocol.ID,
+) (err error) {
+	defer func() {
+		if err == nil {
+			return
+		}
+		s.addResult(ctx, peerID, err)
+	}()
+
+	// Circuit relay connections are transient
+	stream, err := tcpNode.NewStream(network.WithUseTransient(ctx, ""), peerID, protoID...)
+	if err != nil {
+		return errors.Wrap(err, "tcpNode stream")
+	}
+	defer stream.Close()
+
+	b, err := proto.Marshal(request)
+	if err != nil {
+		return errors.Wrap(err, "marshal proto request")
+	}
+
+	if _, err := stream.Write(b); err != nil {
+		return errors.Wrap(err, "write response")
+	}
+
+	b, err = io.ReadAll(stream)
+	if err != nil {
+		return errors.Wrap(err, "read stream")
+	}
+
+	if err := proto.Unmarshal(b, response); err != nil {
+		return errors.Wrap(err, "unmarshal proto response")
+	}
 
 	return nil
 }
@@ -120,14 +165,11 @@ func Send(ctx context.Context, tcpNode host.Host, protoID protocol.ID, peerID pe
 	if err != nil {
 		return errors.Wrap(err, "tcpNode stream")
 	}
+	defer s.Close()
 
 	_, err = s.Write(b)
 	if err != nil {
 		return errors.Wrap(err, "tcpNode write")
-	}
-
-	if err := s.Close(); err != nil {
-		return errors.Wrap(err, "tcpNode close")
 	}
 
 	return nil
