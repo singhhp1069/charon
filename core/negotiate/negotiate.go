@@ -18,6 +18,7 @@ package negotiate
 import (
 	"context"
 	"io"
+	"math/rand"
 	"sort"
 	"testing"
 	"time"
@@ -296,18 +297,26 @@ func (n *Negotiator) negotiateOnce(ctx context.Context, slot int64) error {
 // required peers include them and are ordered by number of peers then by overall priority.
 //
 // Peer messages need to validated beforehand such that
-// they do not contain duplicate peers, nor may individual
-// peers contain duplicate topics, nor may individual topics
-// contain duplicate labels or more than 1000 labels.
-//
+// they do not contain duplicate peers, they contain identical slots,
+// individual peers may not contain duplicate topics, individual topics
+// may not contain duplicate labels or more than 1000 labels.
 func calculateResults(msgs map[peer.ID]*pbv1.NegotiateMsg, minRequired int) []*pbv1.NegotiateTopic {
-	// Sort peers by ID for deterministic output.
-	var pIDs []peer.ID
-	for pID := range msgs {
+	// Shuffle peers deterministicly by ID.
+	var (
+		pIDs []peer.ID
+		slot int64
+	)
+	for pID, msg := range msgs {
+		if slot == 0 {
+			slot = msg.Slot
+		} else if msg.Slot != slot {
+			panic("mismatching slots")
+		}
 		pIDs = append(pIDs, pID)
 	}
-	sort.Slice(pIDs, func(i, j int) bool {
-		return pIDs[i] < pIDs[j]
+	//nolint:gosec // Math rand used for deterministic behaviour.
+	rand.New(rand.NewSource(slot)).Shuffle(len(pIDs), func(i, j int) {
+		pIDs[i], pIDs[j] = pIDs[j], pIDs[i]
 	})
 
 	// Group all label sets by topic
