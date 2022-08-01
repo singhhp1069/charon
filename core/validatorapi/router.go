@@ -508,18 +508,37 @@ func submitBlindedBlock(p eth2client.BlindedBeaconBlockSubmitter) handlerFunc {
 // submitValidatorRegistrations returns a handler function for the validator (builder) registration submitter endpoint.
 func submitValidatorRegistrations(r eth2client.ValidatorRegistrationsSubmitter) handlerFunc {
 	return func(ctx context.Context, _ map[string]string, _ url.Values, body []byte) (interface{}, error) {
-		registration := new(eth2v1.SignedValidatorRegistration)
-		if err := registration.UnmarshalJSON(body); err != nil {
+		// var rawSlice []json.RawMessage // Delete is not required
+		// if err := json.Unmarshal(body, &rawSlice); err != nil {
+		//	return nil, errors.Wrap(err, "unmarshal signed validator (builder) registration")
+		//}
+		//
+		// var versioned []*eth2api.VersionedSignedValidatorRegistration
+		// for _, raw := range rawSlice {
+		//	unversioned := new(eth2api.VersionedSignedValidatorRegistration)
+		//	if err := json.Unmarshal(raw, &unversioned); err != nil {
+		//		return nil, errors.Wrap(err, "unmarshal signed validator (builder) registration")
+		//	}
+		//	versioned = append(versioned, &eth2api.VersionedSignedValidatorRegistration{
+		//		Version: spec.BuilderVersionV1,
+		//		V1:      unversioned,
+		//	})
+		//}
+
+		var registrations []*eth2v1.SignedValidatorRegistration
+		if err := json.Unmarshal(body, &registrations); err != nil {
 			return nil, errors.Wrap(err, "unmarshal signed validator (builder) registration")
 		}
-		registrations := []*eth2api.VersionedSignedValidatorRegistration{
-			{
+
+		var versioned []*eth2api.VersionedSignedValidatorRegistration
+		for _, registration := range registrations {
+			versioned = append(versioned, &eth2api.VersionedSignedValidatorRegistration{
 				Version: spec.BuilderVersionV1,
 				V1:      registration,
-			},
+			})
 		}
 
-		return nil, r.SubmitValidatorRegistrations(ctx, registrations)
+		return nil, r.SubmitValidatorRegistrations(ctx, versioned)
 	}
 }
 
