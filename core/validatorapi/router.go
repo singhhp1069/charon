@@ -533,6 +533,7 @@ func submitValidatorRegistrations(r eth2client.ValidatorRegistrationsSubmitter) 
 // submitExit returns a handler function for the exit submitter endpoint.
 func submitExit(p eth2client.VoluntaryExitSubmitter) handlerFunc {
 	return func(ctx context.Context, _ map[string]string, _ url.Values, body []byte) (interface{}, error) {
+		fmt.Printf("🔥!! body=%v\n", body)
 		exit := new(eth2p0.SignedVoluntaryExit)
 		if err := exit.UnmarshalJSON(body); err != nil {
 			return nil, errors.Wrap(err, "unmarshal signed voluntary exit")

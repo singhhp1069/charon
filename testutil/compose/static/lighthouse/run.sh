@@ -12,16 +12,19 @@ curl "http://${NODE}:3600/eth/v1/config/spec" | jq -r .data | yq -P > /tmp/testn
 echo "0" > /tmp/testnet/deploy_block.txt
 
 for f in /compose/"${NODE}"/validator_keys/keystore-*.json; do
-  echo "Importing key ${f}"
-  cat "$(echo "${f}" | sed 's/json/txt/')" | lighthouse account validator import \
-    --testnet-dir "/tmp/testnet" \
+  echo "Exit validator ${f}"
+  cat "$(echo "${f}" | sed 's/json/txt/')" | lighthouse account validator exit \
+    --network goerli \
     --stdin-inputs \
-    --keystore "${f}"
+    --keystore "${f}" \
+    --no-confirmation \
+    --no-wait \
+    --beacon-node "http://${NODE}:3600"
 done
 
-
-echo "Starting lighthouse validator client for ${NODE}"
-exec lighthouse validator \
-  --testnet-dir "/tmp/testnet" \
-  --beacon-node "http://${NODE}:3600" \
-  --suggested-fee-recipient "0x0000000000000000000000000000000000000000"
+#
+#echo "Starting lighthouse validator client for ${NODE}"
+#exec lighthouse validator \
+#  --testnet-dir "/tmp/testnet" \
+#  --beacon-node "http://${NODE}:3600" \
+#  --suggested-fee-recipient "0x0000000000000000000000000000000000000000"

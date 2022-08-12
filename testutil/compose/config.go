@@ -126,7 +126,7 @@ func NewDefaultConfig() Config {
 		Threshold:     defaultThreshold,
 		NumValidators: defaultNumVals,
 		ImageTag:      defaultImageTag,
-		VCs:           []VCType{VCTeku, VCLighthouse, VCMock},
+		VCs:           []VCType{VCLighthouse},
 		KeyGen:        defaultKeyGen,
 		BeaconNode:    defaultBeaconNode,
 		Step:          stepNew,
