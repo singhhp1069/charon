@@ -32,6 +32,7 @@ import (
 func NewMemDB(deadliner core.Deadliner) *MemDB {
 	return &MemDB{
 		attDuties:        make(map[attKey]*eth2p0.AttestationData),
+		aggDuties:        make(map[aggKey]*eth2p0.Attestation),
 		attPubKeys:       make(map[pkKey]core.PubKey),
 		attKeysBySlot:    make(map[int64][]pkKey),
 		builderProDuties: make(map[int64]*eth2api.VersionedBlindedBeaconBlock),
@@ -41,14 +42,16 @@ func NewMemDB(deadliner core.Deadliner) *MemDB {
 	}
 }
 
-// MemDB is a in-memory dutyDB implementation.
+// MemDB is an in-memory dutyDB implementation.
 // It is a placeholder for the badgerDB implementation.
 type MemDB struct {
 	mu                sync.Mutex
 	attDuties         map[attKey]*eth2p0.AttestationData
+	aggDuties         map[aggKey]*eth2p0.Attestation
 	attPubKeys        map[pkKey]core.PubKey
 	attKeysBySlot     map[int64][]pkKey
 	attQueries        []attQuery
+	aggQueries        []aggQuery
 	builderProDuties  map[int64]*eth2api.VersionedBlindedBeaconBlock
 	builderProQueries []builderProQuery
 	proDuties         map[int64]*spec.VersionedBeaconBlock
@@ -107,6 +110,14 @@ func (db *MemDB) Store(_ context.Context, duty core.Duty, unsignedSet core.Unsig
 			}
 		}
 		db.resolveAttQueriesUnsafe()
+	case core.DutyAggregator:
+		for _, unsignedData := range unsignedSet {
+			err := db.storeAggregateAttestationUnsafe(unsignedData)
+			if err != nil {
+				return err
+			}
+		}
+		db.resolveAggQueriesUnsafe()
 	default:
 		return errors.New("unsupported duty type", z.Str("type", duty.Type.String()))
 	}
@@ -261,6 +272,35 @@ func (db *MemDB) storeAttestationUnsafe(pubkey core.PubKey, unsignedData core.Un
 	return nil
 }
 
+// storeAggregateAttestationUnsafe stores the unsigned aggregate attestation. It is unsafe since it assumes the lock is held.
+func (db *MemDB) storeAggregateAttestationUnsafe(unsignedData core.UnsignedData) error {
+	cloned, err := unsignedData.Clone() // Clone before storing.
+	if err != nil {
+		return err
+	}
+
+	aggData, ok := cloned.(core.AggregatedAttestation)
+	if !ok {
+		return errors.New("invalid unsigned aggregate attestation data")
+	}
+
+	// Store key and value for AwaitAggregatedAttestation.
+	aKey := aggKey{
+		Slot:        int64(aggData.Data.Slot),
+		AttDataRoot: aggData.Data.BeaconBlockRoot,
+	}
+
+	if value, ok := db.aggDuties[aKey]; ok {
+		if value.String() != aggData.Data.String() {
+			return errors.New("clashing aggregate attestation data", z.Any("key", aKey))
+		}
+	} else {
+		db.aggDuties[aKey] = &aggData.Attestation
+	}
+
+	return nil
+}
+
 // storeBeaconBlockUnsafe stores the unsigned BeaconBlock. It is unsafe since it assumes the lock is held.
 func (db *MemDB) storeBeaconBlockUnsafe(unsignedData core.UnsignedData) error {
 	cloned, err := unsignedData.Clone() // Clone before storing.
@@ -354,6 +394,23 @@ func (db *MemDB) resolveAttQueriesUnsafe() {
 	db.attQueries = unresolved
 }
 
+// resolveAggQueriesUnsafe resolves any aggQuery to a result if found.
+// It is unsafe since it assume that the lock is held.
+func (db *MemDB) resolveAggQueriesUnsafe() {
+	var unresolved []aggQuery
+	for _, query := range db.aggQueries {
+		value, ok := db.aggDuties[query.Key]
+		if !ok {
+			unresolved = append(unresolved, query)
+			continue
+		}
+
+		query.Response <- value
+	}
+
+	db.aggQueries = unresolved
+}
+
 // resolveProQueriesUnsafe resolve any proQuery to a result if found.
 // It is unsafe since it assume that the lock is held.
 func (db *MemDB) resolveProQueriesUnsafe() {
@@ -401,6 +458,8 @@ func (db *MemDB) deleteDutyUnsafe(duty core.Duty) error {
 			delete(db.attDuties, attKey{Slot: key.Slot, CommIdx: key.CommIdx})
 		}
 		delete(db.attKeysBySlot, duty.Slot)
+	case core.DutyAggregator:
+
 	default:
 		return errors.New("unknown duty type")
 	}
@@ -408,23 +467,35 @@ func (db *MemDB) deleteDutyUnsafe(duty core.Duty) error {
 	return nil
 }
 
-// attKey is the key to lookup an attester value in the DB.
+// attKey is the key to look up an attester value in the DB.
 type attKey struct {
 	Slot    int64
 	CommIdx int64
 }
 
-// pkKey is the key to lookup pubkeys by attestation in the DB.
+// pkKey is the key to look up pubkeys by attestation in the DB.
 type pkKey struct {
 	Slot       int64
 	CommIdx    int64
 	ValCommIdx int64
 }
 
+// aggKey is the key to look up an aggregated attestation in the DB.
+type aggKey struct {
+	Slot        int64
+	AttDataRoot eth2p0.Root
+}
+
 // attQuery is a waiting attQuery with a response channel.
 type attQuery struct {
 	Key      attKey
 	Response chan<- *eth2p0.AttestationData
+}
+
+// aggQuery is a waiting aggQuery with a response channel.
+type aggQuery struct {
+	Key      aggKey
+	Response chan<- *eth2p0.Attestation
 }
 
 // proQuery is a waiting proQuery with a response channel.
