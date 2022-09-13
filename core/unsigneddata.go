@@ -17,7 +17,7 @@ package core
 
 import (
 	"encoding/json"
-
+	"fmt"
 	eth2api "github.com/attestantio/go-eth2-client/api"
 	eth2v1 "github.com/attestantio/go-eth2-client/api/v1"
 	"github.com/attestantio/go-eth2-client/spec"
@@ -84,7 +84,7 @@ type attestationDataJSON struct {
 
 // AggregatedAttestation wraps Attestation and implements the UnsignedData interface.
 type AggregatedAttestation struct {
-	eth2p0.Attestation
+	Attestation eth2p0.Attestation
 }
 
 func (a AggregatedAttestation) Clone() (UnsignedData, error) {
@@ -98,21 +98,30 @@ func (a AggregatedAttestation) Clone() (UnsignedData, error) {
 }
 
 func (a AggregatedAttestation) MarshalJSON() ([]byte, error) {
-	resp, err := json.Marshal(a)
+	resp, err := json.Marshal(aggregatedAttestationJSON{Attestation: a.Attestation})
 	if err != nil {
 		return nil, errors.Wrap(err, "marshal aggregated attestation")
 	}
 
+	fmt.Printf("marshal called: %+v\n\n%+v\n\n", a, a.Attestation)
+
 	return resp, nil
 }
 
-func (a *AggregatedAttestation) UnmarshalJSON(input []byte) error { //nolint:revive
-	var att AggregatedAttestation
+func (a *AggregatedAttestation) UnmarshalJSON(input []byte) error {
+	fmt.Printf("unmarshal called: %+v\n", *a)
+	var att aggregatedAttestationJSON
 	if err := json.Unmarshal(input, &att); err != nil {
 		return errors.Wrap(err, "unmarshal aggregated attestation")
 	}
 
+	a.Attestation = att.Attestation
+
 	return nil
+}
+
+type aggregatedAttestationJSON struct {
+	Attestation eth2p0.Attestation `json:"attestation"`
 }
 
 // NewVersionedBeaconBlock validates and returns a new wrapped VersionedBeaconBlock.

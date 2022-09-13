@@ -17,7 +17,6 @@ package core
 
 import (
 	"encoding/json"
-
 	eth2api "github.com/attestantio/go-eth2-client/api"
 	eth2v1 "github.com/attestantio/go-eth2-client/api/v1"
 	"github.com/attestantio/go-eth2-client/spec"

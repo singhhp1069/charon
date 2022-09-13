@@ -24,6 +24,22 @@ import (
 	"github.com/obolnetwork/charon/testutil"
 )
 
+func TestAttestationData(t *testing.T) {
+	attData1 := core.AttestationData{Data: *testutil.RandomAttestationData()}
+	slot1 := attData1.Data.Slot
+	root1 := attData1.Data.BeaconBlockRoot
+
+	clone, err := attData1.Clone()
+	require.NoError(t, err)
+
+	attData2 := clone.(core.AttestationData)
+	slot2 := attData2.Data.Slot
+	root2 := attData2.Data.BeaconBlockRoot
+
+	require.Equal(t, slot1, slot2)
+	require.Equal(t, root1, root2)
+}
+
 func TestCloneVersionedBeaconBlock(t *testing.T) {
 	block := testutil.RandomCoreVersionBeaconBlock(t)
 	slot1, err := block.Slot()
@@ -49,5 +65,16 @@ func TestCloneVersionedBlindedBeaconBlock(t *testing.T) {
 	slot2, err := block2.Slot()
 	require.NoError(t, err)
 
+	require.Equal(t, slot1, slot2)
+}
+
+func TestAggregatedAttestation(t *testing.T) {
+	att1 := core.AggregatedAttestation{Attestation: *testutil.RandomAttestation()}
+	slot1 := att1.Attestation.Data.Slot
+	clone, err := att1.Clone()
+	require.NoError(t, err)
+
+	att2 := clone.(core.AggregatedAttestation)
+	slot2 := att2.Attestation.Data.Slot
 	require.Equal(t, slot1, slot2)
 }

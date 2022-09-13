@@ -209,6 +209,30 @@ func (db *MemDB) AwaitAttestation(ctx context.Context, slot int64, commIdx int64
 	}
 }
 
+// AwaitAggregateAttestation implements core.DutyDB, see its godoc.
+func (db *MemDB) AwaitAggregateAttestation(ctx context.Context, slot eth2p0.Slot, attDataRoot eth2p0.Root) (*eth2p0.Attestation, error) {
+	db.mu.Lock()
+	response := make(chan *eth2p0.Attestation, 1) // Buffer of one so resolving never blocks
+	db.aggQueries = append(db.aggQueries, aggQuery{
+		Key: aggKey{
+			Slot:        int64(slot),
+			AttDataRoot: attDataRoot,
+		},
+		Response: response,
+	})
+	db.resolveAggQueriesUnsafe()
+	db.mu.Unlock()
+
+	select {
+	case <-db.shutdown:
+		return nil, errors.New("dutydb shutdown")
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case value := <-response:
+		return value, nil
+	}
+}
+
 // PubKeyByAttestation implements core.DutyDB, see its godoc.
 func (db *MemDB) PubKeyByAttestation(_ context.Context, slot, commIdx, valCommIdx int64) (core.PubKey, error) {
 	db.mu.Lock()

@@ -175,7 +175,7 @@ func TestMemDBProposer(t *testing.T) {
 		unsigned, err := core.NewVersionedBeaconBlock(blocks[i])
 		require.NoError(t, err)
 
-		duty := core.Duty{Slot: slots[i], Type: core.DutyProposer}
+		duty := core.NewProposerDuty(slots[i])
 		err = db.Store(ctx, duty, core.UnsignedDataSet{
 			pubkeysByIdx[eth2p0.ValidatorIndex(i)]: unsigned,
 		})
@@ -186,6 +186,54 @@ func TestMemDBProposer(t *testing.T) {
 	for i := 0; i < queries; i++ {
 		actualData := <-awaitResponse[i]
 		require.Equal(t, blocks[i], actualData.block)
+	}
+}
+
+func TestMemDBAggregator(t *testing.T) {
+	const queries = 3
+
+	var (
+		atts     []*eth2p0.Attestation
+		attRoots []eth2p0.Root
+		slots    []eth2p0.Slot
+	)
+	for i := 0; i < queries; i++ {
+		att := testutil.RandomAttestation()
+		root, err := att.Data.HashTreeRoot()
+		require.NoError(t, err)
+		slots = append(slots, att.Data.Slot)
+		attRoots = append(attRoots, root)
+		atts = append(atts, att)
+	}
+
+	ctx := context.Background()
+	db := dutydb.NewMemDB(new(testDeadliner))
+
+	type response struct {
+		att *eth2p0.Attestation
+	}
+
+	var awaitResponse [queries]chan response
+	for i := 0; i < queries; i++ {
+		awaitResponse[i] = make(chan response)
+		go func(slot eth2p0.Slot, root eth2p0.Root) {
+			att, err := db.AwaitAggregateAttestation(ctx, slot, root)
+			require.NoError(t, err)
+			awaitResponse[slot] <- response{att: att}
+		}(slots[i], attRoots[i])
+	}
+
+	for i := 0; i < queries; i++ {
+		require.NoError(t, db.Store(ctx, core.NewAggregatorDuty(int64(slots[i])), core.UnsignedDataSet{
+			testutil.RandomCorePubKey(t): core.AggregatedAttestation{
+				Attestation: *atts[i],
+			},
+		}))
+	}
+
+	for i := 0; i < queries; i++ {
+		actual := <-awaitResponse[i]
+		require.Equal(t, atts[i], actual.att)
 	}
 }
 

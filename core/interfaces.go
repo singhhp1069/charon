@@ -65,6 +65,9 @@ type DutyDB interface {
 	// for the slot and committee index when available.
 	AwaitAttestation(ctx context.Context, slot, commIdx int64) (*eth2p0.AttestationData, error)
 
+	// AwaitAggregateAttestation blocks and returns the aggregate attestation for the slot and attestation data root when available.
+	AwaitAggregateAttestation(ctx context.Context, slot eth2p0.Slot, attDataRoot eth2p0.Root) (*eth2p0.Attestation, error)
+
 	// PubKeyByAttestation returns the validator PubKey for the provided attestation data
 	// slot, committee index and validator committee index. This allows mapping of attestation
 	// data response to validator.
