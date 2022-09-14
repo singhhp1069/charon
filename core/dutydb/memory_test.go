@@ -216,11 +216,11 @@ func TestMemDBAggregator(t *testing.T) {
 	var awaitResponse [queries]chan response
 	for i := 0; i < queries; i++ {
 		awaitResponse[i] = make(chan response)
-		go func(slot eth2p0.Slot, root eth2p0.Root) {
-			att, err := db.AwaitAggregateAttestation(ctx, slot, root)
+		go func(idx int) {
+			att, err := db.AwaitAggregateAttestation(ctx, slots[idx], attRoots[idx])
 			require.NoError(t, err)
-			awaitResponse[slot] <- response{att: att}
-		}(slots[i], attRoots[i])
+			awaitResponse[idx] <- response{att: att}
+		}(i)
 	}
 
 	for i := 0; i < queries; i++ {

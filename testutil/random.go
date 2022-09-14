@@ -267,6 +267,12 @@ func RandomCoreVersionBlindedBeaconBlock(t *testing.T) core.VersionedBlindedBeac
 	}
 }
 
+func RandomCoreAggregatedAttestation() core.AggregatedAttestation {
+	return core.AggregatedAttestation{
+		Attestation: *RandomAttestation(),
+	}
+}
+
 func RandomCoreVersionSignedBlindedBeaconBlock(t *testing.T) core.VersionedSignedBlindedBeaconBlock {
 	t.Helper()
 

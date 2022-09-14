@@ -308,14 +308,19 @@ func (db *MemDB) storeAggregateAttestationUnsafe(unsignedData core.UnsignedData)
 		return errors.New("invalid unsigned aggregate attestation data")
 	}
 
+	attDataRoot, err := aggData.Attestation.Data.HashTreeRoot()
+	if err != nil {
+		return err
+	}
+
 	// Store key and value for AwaitAggregatedAttestation.
 	aKey := aggKey{
-		Slot:        int64(aggData.Data.Slot),
-		AttDataRoot: aggData.Data.BeaconBlockRoot,
+		Slot:        int64(aggData.Attestation.Data.Slot),
+		AttDataRoot: attDataRoot,
 	}
 
 	if value, ok := db.aggDuties[aKey]; ok {
-		if value.String() != aggData.Data.String() {
+		if value.String() != aggData.Attestation.Data.String() {
 			return errors.New("clashing aggregate attestation data", z.Any("key", aKey))
 		}
 	} else {

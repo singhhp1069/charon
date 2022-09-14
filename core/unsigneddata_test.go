@@ -24,57 +24,41 @@ import (
 	"github.com/obolnetwork/charon/testutil"
 )
 
-func TestAttestationData(t *testing.T) {
-	attData1 := core.AttestationData{Data: *testutil.RandomAttestationData()}
-	slot1 := attData1.Data.Slot
-	root1 := attData1.Data.BeaconBlockRoot
+func TestUnsignedDataClone(t *testing.T) {
+	tests := []struct {
+		name string
+		data core.UnsignedData
+	}{
+		{
+			name: "attestation data",
+			data: testutil.RandomCoreAttestationData(t),
+		},
+		{
+			name: "versioned beacon block",
+			data: testutil.RandomCoreVersionBeaconBlock(t),
+		},
+		{
+			name: "versioned blinded beacon block",
+			data: testutil.RandomCoreVersionBlindedBeaconBlock(t),
+		},
+		{
+			name: "aggregated attestation",
+			data: testutil.RandomCoreAggregatedAttestation(),
+		},
+	}
 
-	clone, err := attData1.Clone()
-	require.NoError(t, err)
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			clone, err := test.data.Clone()
+			require.NoError(t, err)
 
-	attData2 := clone.(core.AttestationData)
-	slot2 := attData2.Data.Slot
-	root2 := attData2.Data.BeaconBlockRoot
+			b1, err := test.data.MarshalJSON()
+			require.NoError(t, err)
 
-	require.Equal(t, slot1, slot2)
-	require.Equal(t, root1, root2)
-}
+			b2, err := clone.MarshalJSON()
+			require.NoError(t, err)
 
-func TestCloneVersionedBeaconBlock(t *testing.T) {
-	block := testutil.RandomCoreVersionBeaconBlock(t)
-	slot1, err := block.Slot()
-	require.NoError(t, err)
-
-	clone, err := block.Clone()
-	require.NoError(t, err)
-	block2 := clone.(core.VersionedBeaconBlock)
-	slot2, err := block2.Slot()
-	require.NoError(t, err)
-
-	require.Equal(t, slot1, slot2)
-}
-
-func TestCloneVersionedBlindedBeaconBlock(t *testing.T) {
-	block := testutil.RandomCoreVersionBlindedBeaconBlock(t)
-	slot1, err := block.Slot()
-	require.NoError(t, err)
-
-	clone, err := block.Clone()
-	require.NoError(t, err)
-	block2 := clone.(core.VersionedBlindedBeaconBlock)
-	slot2, err := block2.Slot()
-	require.NoError(t, err)
-
-	require.Equal(t, slot1, slot2)
-}
-
-func TestAggregatedAttestation(t *testing.T) {
-	att1 := core.AggregatedAttestation{Attestation: *testutil.RandomAttestation()}
-	slot1 := att1.Attestation.Data.Slot
-	clone, err := att1.Clone()
-	require.NoError(t, err)
-
-	att2 := clone.(core.AggregatedAttestation)
-	slot2 := att2.Attestation.Data.Slot
-	require.Equal(t, slot1, slot2)
+			require.Equal(t, b1, b2)
+		})
+	}
 }
